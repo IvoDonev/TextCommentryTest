@@ -47,6 +47,7 @@
 <body>
 
 <div class="container" ng-app="comments" ng-controller="CommentController">
+
 <!-- Partial for the new comment box -->
 <script type="text/ng-template" id="newCommmentBox.html">
   <div class="modal-header">
@@ -54,11 +55,25 @@
     <h4 class="modal-title">Add a new comment ....</h4>
   </div>
   <div class="modal-body">
-	 <textarea cols="30" rows="10" ng-model="newComment" class="newComment" id="newComment"></textarea>
+	 <textarea cols="30" autofocus rows="10" ng-model="newComment" class="newComment" id="newComment"></textarea>
   </div>
   <div class="modal-footer">
     <button type="button" class="btn btn-default" data-dismiss="modal" ng-click="cancel()">Close</button>
     <button type="button" class="btn btn-primary" data-dismiss="modal" ng-click="save()" ng-disabled="newComment.length==0">Save</button>
+  </div>
+</script>
+
+<!-- Partial for the message box -->
+<script type="text/ng-template" id="messageBox.html">
+  <div class="modal-header">
+    <button type="button" class="close" data-dismiss="modal" ng-click="close(0)">&times;</button>
+    <h4 class="modal-title">{{heading}}</h4>
+  </div>
+  <div class="modal-body">
+  	{{msg}}
+  </div>
+  <div class="modal-footer">
+  	<button type="button" class="btn btn-default" data-dismiss="modal" ng-repeat="b in buttons" ng-click="close(b.val)">{{b.txt}}</button>
   </div>
 </script>
 
@@ -83,6 +98,7 @@
 	</div>
 </div>
 
+
 </div>
 
 
@@ -92,17 +108,30 @@
 	function getData (cb) {
 		cb ({
 			src: "data.html",				// source html file (or perhaps markdown)
-			comments: [
-				{"id":1,"text":"Test comment here","highlight":"type:textContent|643$776$1$highlight$"},
-				{"id":2,"text":"another comment","highlight":"type:textContent|776$1305$2$highlight$"},
-				{"id":3,"text":"yet another comment.....","highlight":"type:textContent|1936$2426$3$highlight$"}
+			comments: 
+			[	
+				{"id":1,"text":"First test comment","highlight":"type:textContent|1090$1211$4$highlight$"},
+				{"id":2,"text":"Second Test Comment","highlight":"type:textContent|1868$1939$5$highlight$"},
+				{"id":3,"text":"Third Test Comment","highlight":"type:textContent|1438$1548$6$highlight$"}
 			]
-
 		});
 	}
 
 	// create our angular app here
 	var textCommentApp = angular.module('comments',['ui.bootstrap']);
+
+
+	//https://github.com/angular-ui/bootstrap/issues/1696 - set focus on the textarea element as soon as the modal is open.
+	angular.module('ui.bootstrap.modal').directive('modalWindow', function ($timeout) {
+		return {
+		   priority: 1,
+    	   link: function (scope, element, attrs) {
+      			$timeout(function () {
+        			element.find('[autofocus]').focus();
+      			});
+		    }
+  		};
+	});
 
 	// controller for the new comment modal box
 	textCommentApp.controller('NewCommentBox', ['$scope', '$uibModalInstance', function ($scope, $uibModalInstance) {
@@ -115,11 +144,22 @@
   		};
 	}]);
 
+	// general message box controller
+	textCommentApp.controller("MsgBox", ["$scope", '$uibModalInstance', 'data', function ($scope, $uibModalInstance, data) {
+		$scope.heading = data.heading || "heading";
+		$scope.msg = data.msg || "message";
+		$scope.buttons = data.buttons || [];
+		$scope.close = function (val) {
+ 	  		$uibModalInstance.close(val);
+		}
+	}]);
+
 	textCommentApp.controller('CommentController', ['$scope', '$uibModal', function ($scope, $uibModal) {
 
 		// rangy highlighter to apply a highlight class based on our selection.
 		rangy.init();
-	  	var highlighter = rangy.createHighlighter();
+		var txtArea = document.getElementById('richTextCont');
+	  	var highlighter = rangy.createHighlighter(txtArea);
         highlighter.addClassApplier(rangy.createClassApplier("highlight", {
             ignoreWhiteSpace: true,
             tagNames: ["span", "a"]
@@ -158,24 +198,55 @@
 		// add a new comment modal box
 		$scope.launchAddComment = function () {
 
-			// get the current selection and highlight it.
-			highlighter.removeAllHighlights();
-            highlighter.highlightSelection("highlight");
-            // serialize before we add the comment as we may lose our selection during the pop.
-       		var newHighlight = highlighter.serialize();
+			function addComment() {
+				// get the current selection and highlight it.
+				highlighter.removeAllHighlights();
+    	        highlighter.highlightSelection("highlight");
+        	    // serialize before we add the comment as we may lose our selection during the pop.
+       			var newHighlight = highlighter.serialize();
 
-		    var modalInstance = $uibModal.open({
-			    templateUrl: 'newCommmentBox.html',
-      			controller: 'NewCommentBox'
+			    var modalInstance = $uibModal.open({
+				    templateUrl: 'newCommmentBox.html',
+      				controller: 'NewCommentBox'
+      		    });
+
+	   			modalInstance.result.then(function (newComment) {
+					$scope.comments.push({id:newCommentIdx, text: newComment, highlight: newHighlight});
+					$scope.activeID = newCommentIdx;	
+					newCommentIdx -= 1;
+			    }, function () {
+   					highlighter.removeAllHighlights();
+			    });
+			}
+
+			var sel = window.getSelection();
+			if (sel && sel.anchorNode) {
+				return addComment();
+			}
+
+			// check if a selection has been made - if not prompt the user if they want to add a comment with no selection
+			var msgbox = $uibModal.open({
+			    templateUrl: 'messageBox.html',
+      			controller: 'MsgBox',
+      			resolve : {
+      				data : function () {
+      					return {
+      						heading: "No selection made",
+     						 msg: "You haven't selected any text. Do you want to place a comment with no referenced text?",
+     						 buttons: [
+     						 	{txt: "Yes", val: 1},
+     						 	{txt: "No", val : 0}
+     						 ]
+						}
+      				}
+      			}
       	    });
+			msgbox.result.then(function (response) {
+				if (response == 1) {
+					addComment();
+				}	
+			})
 
-   			modalInstance.result.then(function (newComment) {
-				$scope.comments.push({id:newCommentIdx, text: newComment, highlight: newHighlight});
-				$scope.activeID = newCommentIdx;
-				newCommentIdx -= 1;
-		    }, function () {
-   				highlighter.removeAllHighlights();
-		    });
 		};
 
 		// load the data - this can be replaced witn an ajax call
