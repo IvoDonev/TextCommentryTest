@@ -1,0 +1,190 @@
+<html>
+<head>
+	<title>Text Commentary</title>
+	<style>
+		.fullHeight {
+			height: 100%;
+			overflow: hidden;
+		}
+		.textContainer {
+			margin-left: 0px;
+			padding: 0px;
+			overflow: auto;
+		}
+		.list-group-item.commentHeader { background-color: #efefef; padding: 0; }
+		.commentHeader h4 { padding-left: 5px; padding-bottom: 10px;	}
+		.commentHeader button {
+			margin-right: 5px;
+			float: right;
+			margin-left: auto;
+		}
+		.comments li:first-child {
+			border-radius: 0px;
+		}
+		.newComment {
+			resize: none;
+			width: 100%;
+		}
+		.highlight {
+			background-color: #e2d845;
+		}
+	</style>
+
+<script src="bower_components/rangy/rangy-core.min.js"></script>
+<script src="bower_components/rangy/rangy-classapplier.min.js"></script>
+<script src="bower_components/rangy/rangy-highlighter.min.js"></script>
+
+<script src="//ajax.googleapis.com/ajax/libs/angularjs/1.4.7/angular.js"></script>
+<script src="//ajax.googleapis.com/ajax/libs/angularjs/1.4.7/angular-animate.js"></script>
+<script src="//angular-ui.github.io/bootstrap/ui-bootstrap-tpls-0.14.3.js"></script>
+
+<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.3.5/css/bootstrap.min.css" integrity="sha512-dTfge/zgoMYpP7QbHy4gWMEGsbsdZeCXz7irItjcC3sPUFtf0kuFbDz/ixG7ArTxmDjLXDmezHubeNikyKGVyQ==" crossorigin="anonymous">
+
+
+<body>
+
+<div class="container" ng-app="comments" ng-controller="CommentController">
+<!-- Partial for the new comment box -->
+<script type="text/ng-template" id="newCommmentBox.html">
+  <div class="modal-header">
+    <button type="button" class="close" data-dismiss="modal" ng-click="cancel()">&times;</button>
+    <h4 class="modal-title">Add a new comment ....</h4>
+  </div>
+  <div class="modal-body">
+	 <textarea cols="30" rows="10" ng-model="newComment" class="newComment" id="newComment"></textarea>
+  </div>
+  <div class="modal-footer">
+    <button type="button" class="btn btn-default" data-dismiss="modal" ng-click="cancel()">Close</button>
+    <button type="button" class="btn btn-primary" data-dismiss="modal" ng-click="save()" ng-disabled="newComment.length==0">Save</button>
+  </div>
+</script>
+
+<div class="row">
+	<div class="col-sm-6 col-xs-12 fullHeight textContainer">
+		<ng-include id="richTextCont" src="textSrc"></ng-include>
+	</div>
+	<div class="col-sm-6 col-xs-12 fullHeight">
+		<ul class="list-group comments">
+			<li class="list-group-item commentHeader">
+				<h4>Comments
+					<button type="button" class="btn btn-primary btn-sm" data-toggle="modal" data-target="#myModal" ng-click="launchAddComment()">
+						Add Comment
+					</button> 
+				</h4>
+			</li>
+			<li class="list-group-item" ng-repeat="c in comments" ng-click="setSelection(c)" ng-class="{'active':c.id==activeID}">
+				<span>{{c.text}}</span> 
+		        <button type="button" class="close pull-right" data-dismiss="modal" ng-click="removeComment(c)">&times;</button>
+			</li>
+		</ul>
+	</div>
+</div>
+
+</div>
+
+
+<script type="text/javascript">
+	
+	// function which will retrieve the data - can be through an AJAX request
+	function getData (cb) {
+		cb ({
+			src: "data.html",				// source html file (or perhaps markdown)
+			comments: [
+				{"id":1,"text":"Test comment here","highlight":"type:textContent|643$776$1$highlight$"},
+				{"id":2,"text":"another comment","highlight":"type:textContent|776$1305$2$highlight$"},
+				{"id":3,"text":"yet another comment.....","highlight":"type:textContent|1936$2426$3$highlight$"}
+			]
+
+		});
+	}
+
+	// create our angular app here
+	var textCommentApp = angular.module('comments',['ui.bootstrap']);
+
+	// controller for the new comment modal box
+	textCommentApp.controller('NewCommentBox', ['$scope', '$uibModalInstance', function ($scope, $uibModalInstance) {
+		$scope.newComment = "";
+		$scope.save = function () { 
+    		$uibModalInstance.close($scope.newComment);
+  		};
+		$scope.cancel = function () {
+		    $uibModalInstance.dismiss('cancel');
+  		};
+	}]);
+
+	textCommentApp.controller('CommentController', ['$scope', '$uibModal', function ($scope, $uibModal) {
+
+		// rangy highlighter to apply a highlight class based on our selection.
+		rangy.init();
+	  	var highlighter = rangy.createHighlighter();
+        highlighter.addClassApplier(rangy.createClassApplier("highlight", {
+            ignoreWhiteSpace: true,
+            tagNames: ["span", "a"]
+        }))
+
+		$scope.textSrc = null;	// source for our rich text or html
+		$scope.activeID = -1;	// which comment is active at the moment.
+		// new comments will have ids that are forever decrementing (to distinguish them amongst each other and from previous comments too)
+		var newCommentIdx = -1;
+
+		// set a comment as active and highlight it's selection if any.
+		$scope.setSelection = function (comment) {
+			$scope.activeID = comment.id;
+
+			highlighter.removeAllHighlights();
+			// if this comment has a serialized highlight information - display it now.
+			if (comment.highlight) {
+				highlighter.deserialize(comment.highlight);
+			}
+		};
+
+		// delete a comment
+		$scope.removeComment = function (comment) {	
+
+			// remove highlights if we remove the active comment item.
+			if (comment.id == $scope.activeID) {
+				highlighter.removeAllHighlights();
+			}
+
+			var idx = $scope.comments.indexOf(comment);
+			if (idx >= 0) {
+				$scope.comments.splice(idx, 1); 
+			}
+		};
+
+		// add a new comment modal box
+		$scope.launchAddComment = function () {
+
+			// get the current selection and highlight it.
+			highlighter.removeAllHighlights();
+            highlighter.highlightSelection("highlight");
+            // serialize before we add the comment as we may lose our selection during the pop.
+       		var newHighlight = highlighter.serialize();
+
+		    var modalInstance = $uibModal.open({
+			    templateUrl: 'newCommmentBox.html',
+      			controller: 'NewCommentBox'
+      	    });
+
+   			modalInstance.result.then(function (newComment) {
+				$scope.comments.push({id:newCommentIdx, text: newComment, highlight: newHighlight});
+				$scope.activeID = newCommentIdx;
+				newCommentIdx -= 1;
+		    }, function () {
+   				highlighter.removeAllHighlights();
+		    });
+		};
+
+		// load the data - this can be replaced witn an ajax call
+		getData(function (data) {
+			$scope.textSrc = data.src ||  "";
+			$scope.comments = data.comments || [];
+		});
+
+	}]);
+
+</script>
+
+
+</body>
+</html>

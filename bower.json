@@ -1,0 +1,15 @@
+{
+  "name": "TextCommentApp",
+  "authors": [
+    "Ivo <igdonev@gmail.com>"
+  ],
+  "description": "test app to comment on text selection",
+  "main": "index.html",
+  "moduleType": [],
+  "license": "MIT",
+  "homepage": "",
+  "private": true,
+  "dependencies": {
+    "rangy": "~1.3.0"
+  }
+}
